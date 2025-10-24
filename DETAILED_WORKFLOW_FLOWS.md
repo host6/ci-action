@@ -1,182 +1,285 @@
-# Detailed Workflow Execution Flows
+# Detailed Workflow Execution Flows - Starting from Voedger
 
-## 1. PR on pkg-cmd
-
-**Trigger:** `pull_request_target` | **File:** [`ci-pkg-cmd_pr.yml`](.github/workflows/ci-pkg-cmd_pr.yml#L1)
-
-[call-workflow-ci-pkg](.github/workflows/ci-pkg-cmd_pr.yml#L9) → [`ci_reuse_go_pr.yml`](.github/workflows/ci_reuse_go_pr.yml#L1)
-1. [Set up Go 1.24](.github/workflows/ci_reuse_go_pr.yml#L42)
-2. [Install TinyGo](.github/workflows/ci_reuse_go_pr.yml#L49)
-3. [Checkout PR](.github/workflows/ci_reuse_go_pr.yml#L54)
-4. [Check PR size](.github/workflows/ci_reuse_go_pr.yml#L60)
-5. [Cancel workflows](.github/workflows/ci_reuse_go_pr.yml#L66)
-6. [Cache modules](.github/workflows/ci_reuse_go_pr.yml#L74)
-7. [Run CI action](.github/workflows/ci_reuse_go_pr.yml#L82)
-8. [Test subfolders](.github/workflows/ci_reuse_go_pr.yml#L95)
-9. [Check copyright](.github/workflows/ci_reuse_go_pr.yml#L100)
-10. [Run linters](.github/workflows/ci_reuse_go_pr.yml#L103)
-
-[auto-merge-pr](.github/workflows/ci-pkg-cmd_pr.yml#L25) → [`merge.yml`](.github/workflows/merge.yml#L1)
-- [Merge PR](.github/workflows/merge.yml#L15)
-
-## CI Action Flow
-
-**File:** [`index.js`](index.js#L1) | **Config:** [`action.yml`](action.yml#L1)
-
-1. [Parse Inputs](index.js#L15)
-2. [Extract Context](index.js#L39)
-3. [Log Context](index.js#L57)
-4. [Reject Hidden Folders](index.js#L71)
-5. [Check Sources](index.js#L74)
-6. [Detect Language](index.js#L78)
-
-**If Go Project:**
-7. [Setup Deps](index.js#L88)
-8. [Change Folder](index.js#L95)
-9. [go mod tidy](index.js#L99)
-10. [Build](index.js#L103)
-11. [Test+Codecov](index.js#L109)
-12. [Restore Dir](index.js#L139)
-13. [Custom Build](index.js#L142)
-
-**If Node.js Project:**
-7. [npm install](index.js#L155)
-8. [npm build](index.js#L156)
-9. [npm test](index.js#L157)
-10. [Codecov](index.js#L160)
-
-14. [Publish Asset](index.js#L174)
-15. [Set Outputs](index.js#L184)
-16. [Error Handling](index.js#L188)
-
-**Modules:** [`common.js`](common.js#L11) | [`checkSources.js`](checkSources.js#L30) | [`rejectHiddenFolders.js`](rejectHiddenFolders.js#L15) | [`publish.js`](publish.js#L52)
+This document describes complete CI/CD workflow execution paths, starting from GitHub events that trigger Voedger workflows, which then call ci-action workflows and bash scripts.
 
 ---
 
-## 2. PR on Storage Paths
+## 1. Pull Request on pkg-cmd (excluding pkg/istorage)
 
-**Trigger:** `pull_request_target` | **File:** [`ci-pkg-storage.yml`](.github/workflows/ci-pkg-storage.yml#L1)
+**GitHub Event:** `pull_request_target` on paths excluding `pkg/istorage/**`
 
-1. [determine_changes](.github/workflows/ci-pkg-storage.yml#L19)
-2. [Get changed files](.github/workflows/ci-pkg-storage.yml#L37)
+**Voedger Workflow:** [`ci-pkg-cmd_pr.yml`](.github/workflows/ci-pkg-cmd_pr.yml)
 
-**If CAS/TTL changed:**
-3. [trigger_cas](.github/workflows/ci-pkg-storage.yml#L145) → [`ci_cas.yml`](.github/workflows/ci_cas.yml#L1)
-   - [Checkout](.github/workflows/ci_cas.yml#L35)
-   - [Setup Go](.github/workflows/ci_cas.yml#L38)
-   - [Cache](.github/workflows/ci_cas.yml#L33)
-   - [Cassandra tests](.github/workflows/ci_cas.yml#L41)
-   - [TTL tests](.github/workflows/ci_cas.yml#L47)
+### Step 1: [Call CI Workflow](.github/workflows/ci-pkg-cmd_pr.yml#L11)
 
-**If Amazon/TTL changed:**
-4. [trigger_amazon](.github/workflows/ci-pkg-storage.yml#L164) → [`ci_amazon.yml`](.github/workflows/ci_amazon.yml#L1)
-   - [Checkout](.github/workflows/ci_amazon.yml#L35)
-   - [Setup Go](.github/workflows/ci_amazon.yml#L38)
-   - [DynamoDB tests](.github/workflows/ci_amazon.yml#L43)
-   - [TTL tests](.github/workflows/ci_amazon.yml#L53)
+**Condition:** `github.repository == 'voedger/voedger'`
 
-5. [auto-merge-pr](.github/workflows/ci-pkg-storage.yml#L183) → [`merge.yml`](.github/workflows/merge.yml#L1)
+```yaml
+uses: untillpro/ci-action/.github/workflows/ci_reuse_go_pr.yml@main
+```
 
----
+**Called Workflow:** [`ci_reuse_go_pr.yml`](https://github.com/untillpro/ci-action/blob/main/.github/workflows/ci_reuse_go_pr.yml)
 
-## 3. Push to main (pkg-cmd)
+**Parameters:**
 
-**Trigger:** `push` | **File:** [`ci-pkg-cmd.yml`](.github/workflows/ci-pkg-cmd.yml#L1)
+- `test_folder: "pkg"`
+- `ignore_copyright: "cmd/voedger/sys.monitor/site.main"`
+- `ignore_bp3: "true"`
+- `short_test: "true"`
+- `ignore_build: "true"`
+- `running_workflow: "CI pkg-cmd PR"`
+- `go_race: "false"`
+- `test_subfolders: "true"`
 
-1. [call-workflow-ci-pkg](.github/workflows/ci-pkg-cmd.yml#L11) → [`ci_reuse_go.yml`](.github/workflows/ci_reuse_go.yml#L1)
-   - [Checkout](.github/workflows/ci_reuse_go.yml#L42)
-   - [Setup Go](.github/workflows/ci_reuse_go.yml#L45)
-   - [TinyGo](.github/workflows/ci_reuse_go.yml#L52)
-   - [Cache](.github/workflows/ci_reuse_go.yml#L64)
-   - [CI action](.github/workflows/ci_reuse_go.yml#L72)
-   - [Tests](.github/workflows/ci_reuse_go.yml#L85)
-   - [Copyright](.github/workflows/ci_reuse_go.yml#L94)
-   - [Linters](.github/workflows/ci_reuse_go.yml#L97)
+### Actions in `ci_reuse_go_pr.yml`
 
-2. [build](.github/workflows/ci-pkg-cmd.yml#L26) → [Set BP3 flag](.github/workflows/ci-pkg-cmd.yml#L34)
+1. [**Setup Go 1.24**](https://github.com/untillpro/ci-action/blob/main/.github/workflows/ci_reuse_go_pr.yml#L42)
+   - Install Go environment
 
-3. [call-workflow-cd_voeger](.github/workflows/ci-pkg-cmd.yml#L43) → [`cd-voedger.yml`](../voedger/.github/workflows/cd-voedger.yml#L1)
-   - [Checkout](../voedger/.github/workflows/cd-voedger.yml#L21)
-   - [Setup Go](../voedger/.github/workflows/cd-voedger.yml#L24)
-   - [Build](../voedger/.github/workflows/cd-voedger.yml#L30)
-   - [Docker login](../voedger/.github/workflows/cd-voedger.yml#L40)
-   - [Push image](../voedger/.github/workflows/cd-voedger.yml#L46)
+2. [**Install TinyGo 0.37.0**](https://github.com/untillpro/ci-action/blob/main/.github/workflows/ci_reuse_go_pr.yml#L49)
+   - Download and install TinyGo compiler
 
----
+3. [**Checkout PR Head Commit**](https://github.com/untillpro/ci-action/blob/main/.github/workflows/ci_reuse_go_pr.yml#L54)
+   - Checkout PR head SHA with full history (fetch-depth: 0)
 
-## 4. Daily Scheduled (5 AM UTC)
+4. [**Check PR File Size**](https://github.com/untillpro/ci-action/blob/main/.github/workflows/ci_reuse_go_pr.yml#L60) → [`checkPR.sh`](https://github.com/untillpro/ci-action/blob/main/scripts/checkPR.sh)
+   - **Validates:**
+     - Total changes: ≤ 2MB
+     - Single file: ≤ 100KB
+     - Number of files: ≤ 200
 
-**Trigger:** `schedule` | **File:** [`ci-full.yml`](.github/workflows/ci-full.yml#L1)
+5. [**Cancel Previous Workflows**](https://github.com/untillpro/ci-action/blob/main/.github/workflows/ci_reuse_go_pr.yml#L66) → [`cancelworkflow.sh`](https://github.com/untillpro/ci-action/blob/main/scripts/cancelworkflow.sh)
+   - Cancels older in-progress workflows on same PR branch
 
-1. [call-workflow-ci](.github/workflows/ci-full.yml#L9) → [`ci_reuse_go.yml`](.github/workflows/ci_reuse_go.yml#L1) (with race detector)
-   - [Checkout](.github/workflows/ci_reuse_go.yml#L42)
-   - [Setup Go](.github/workflows/ci_reuse_go.yml#L45)
-   - [TinyGo](.github/workflows/ci_reuse_go.yml#L52)
-   - [Cache](.github/workflows/ci_reuse_go.yml#L64)
-   - [CI action](.github/workflows/ci_reuse_go.yml#L72)
-   - [Tests](.github/workflows/ci_reuse_go.yml#L85)
-   - [Copyright](.github/workflows/ci_reuse_go.yml#L94)
-   - [Linters](.github/workflows/ci_reuse_go.yml#L97)
+6. [**Cache Go Modules**](https://github.com/untillpro/ci-action/blob/main/.github/workflows/ci_reuse_go_pr.yml#L74)
+   - Cache `~/go/pkg/mod` for faster builds
 
-2. [notify_failure](.github/workflows/ci-full.yml#L23) (if failed) → [Set URL](.github/workflows/ci-full.yml#L30)
+7. [**Run CI Action**](https://github.com/untillpro/ci-action/blob/main/.github/workflows/ci_reuse_go_pr.yml#L82)
+   - **Action:** `untillpro/ci-action@main` (Node.js action)
+   - Executes: `go test ./... -short` with coverage
 
-3. [call-workflow-create-issue](.github/workflows/ci-full.yml#L34) (if failed) → [`create_issue.yml`](../ci-action/.github/workflows/create_issue.yml#L1)
-   - [Checkout](../ci-action/.github/workflows/create_issue.yml#L32)
-   - [Create issue](../ci-action/.github/workflows/create_issue.yml#L35)
+8. [**Test Subfolders**](https://github.com/untillpro/ci-action/blob/main/.github/workflows/ci_reuse_go_pr.yml#L95) → [`test_subfolders.sh`](https://github.com/untillpro/ci-action/blob/main/scripts/test_subfolders.sh)
+   - Runs `go test ./... -short` in all subdirectories with `go.mod`
 
-4. [call-workflow-vulncheck](.github/workflows/ci-full.yml#L47) → [`ci-vulncheck.yml`](../voedger/.github/workflows/ci-vulncheck.yml#L1)
-   - [Setup Go](../voedger/.github/workflows/ci-vulncheck.yml#L11)
-   - [Checkout](../voedger/.github/workflows/ci-vulncheck.yml#L18)
-   - [Install govulncheck](../voedger/.github/workflows/ci-vulncheck.yml#L21)
-   - [Run check](../voedger/.github/workflows/ci-vulncheck.yml#L21)
+9. [**Check Copyright Headers**](https://github.com/untillpro/ci-action/blob/main/.github/workflows/ci_reuse_go_pr.yml#L100) → [`check_copyright.sh`](https://github.com/untillpro/ci-action/blob/main/scripts/check_copyright.sh)
+   - Validates copyright headers in `.go` and `.sql` files
 
-5. [call-workflow-cd-voeger](.github/workflows/ci-full.yml#L50) → [`cd-voedger.yml`](../voedger/.github/workflows/cd-voedger.yml#L1)
+10. [**Run Linters**](https://github.com/untillpro/ci-action/blob/main/.github/workflows/ci_reuse_go_pr.yml#L103) → [`gbash.sh`](https://github.com/untillpro/ci-action/blob/main/scripts/gbash.sh)
+    - Runs golangci-lint v2.4.0 on `pkg` folder
 
----
+### Step 2: [Auto-Merge PR (if CI passes)](.github/workflows/ci-pkg-cmd_pr.yml#L25)
 
-## 5. Manual Trigger (ctool Integration)
+**Condition:** `needs: call-workflow-ci-pkg` (waits for CI to pass)
 
-**Trigger:** `workflow_dispatch` | **File:** [`ctool-integration-test.yml`](.github/workflows/ctool-integration-test.yml#L1)
+```yaml
+uses: ./.github/workflows/merge.yml
+```
 
-1. [deploy](.github/workflows/ctool-integration-test.yml#L25)
-   - [Checkout](.github/workflows/ctool-integration-test.yml#L44)
-   - [AWS creds](.github/workflows/ctool-integration-test.yml#L47)
-   - [Terraform](.github/actions/infrastructure-create-action/action.yml#L17)
-   - [SSH](.github/workflows/ctool-integration-test.yml#L64)
-   - [Init cluster](.github/workflows/ctool-integration-test.yml#L89)
-   - [Tests](.github/workflows/ctool-integration-test.yml#L109)
-   - [Destroy](.github/workflows/ctool-integration-test.yml#L123)
+**Called Workflow:** [`./.github/workflows/merge.yml`](.github/workflows/merge.yml)
 
-2. [upgrade](.github/workflows/ctool-integration-test.yml#L135)
-   - [Checkout](.github/workflows/ctool-integration-test.yml#L156)
-   - [AWS creds](.github/workflows/ctool-integration-test.yml#L159)
-   - [Infra](.github/workflows/ctool-integration-test.yml#L166)
-   - [SSH](.github/workflows/ctool-integration-test.yml#L176)
-   - [Upgrade](.github/workflows/ctool-integration-test.yml#L264)
-   - [Tests](.github/workflows/ctool-integration-test.yml#L302)
-   - [Destroy](.github/workflows/ctool-integration-test.yml#L316)
+### Actions in `merge.yml`
+
+1. [**Merge PR**](.github/workflows/merge.yml#L15) → [`domergepr.sh`](https://github.com/untillpro/ci-action/blob/main/scripts/domergepr.sh)
+   - Automatically merges PR if all checks pass
 
 ---
 
-## 6. Issue Events
+## 2. Push to main (pkg-cmd)
 
-**Closed:** [`linkIssue.yml`](.github/workflows/linkIssue.yml#L1) → [Link to milestone](.github/workflows/linkIssue.yml#L12)
+**GitHub Event:** `push` to `main` branch on paths excluding `pkg/istorage/**`
 
-**Reopened:** [`unlinkIssue.yml`](.github/workflows/unlinkIssue.yml#L1) → [Unlink from milestone](.github/workflows/unlinkIssue.yml#L12)
+**Voedger Workflow:** [`.github/workflows/ci-pkg-cmd.yml`](.github/workflows/ci-pkg-cmd.yml)
 
-**Opened (cprc/cprelease):** [`cp.yml`](.github/workflows/cp.yml#L1) → [Cherry-pick](.github/workflows/cp.yml#L8)
+**Condition:** `github.repository == 'voedger/voedger'`
+
+### Step 1: [Call CI Workflow](.github/workflows/ci-pkg-cmd.yml#L11)
+
+```yaml
+uses: untillpro/ci-action/.github/workflows/ci_reuse_go.yml@main
+```
+
+**Called Workflow:** [`ci_reuse_go.yml`](https://github.com/untillpro/ci-action/blob/main/.github/workflows/ci_reuse_go.yml)
+
+**Parameters:**
+
+- `test_folder: "pkg"`
+- `ignore_copyright: "cmd/voedger/sys.monitor/site.main"`
+- `ignore_bp3: "true"`
+- `short_test: "true"`
+- `go_race: "false"`
+- `ignore_build: "true"`
+- `test_subfolders: "true"`
+
+**Actions in `ci_reuse_go.yml`:**
+
+1. Checkout, Setup Go, Install TinyGo
+2. Cache Go Modules
+3. Run CI Action
+4. Test Subfolders → [`test_subfolders.sh`](https://github.com/untillpro/ci-action/blob/main/scripts/test_subfolders.sh)
+5. Check Copyright → [`check_copyright.sh`](https://github.com/untillpro/ci-action/blob/main/scripts/check_copyright.sh)
+6. Run Linters → [`gbash.sh`](https://github.com/untillpro/ci-action/blob/main/scripts/gbash.sh)
+
+### Step 2: [Set BP3 Flag](.github/workflows/ci-pkg-cmd.yml#L26)
+
+**Condition:** `needs: call-workflow-ci-pkg`
+
+### Step 3: [Rebuild airs-bp3 (if needed)](.github/workflows/ci-pkg-cmd.yml#L46)
+
+**Condition:** `needs: build && outputs.ibp3 == 'true'`
+
+```yaml
+uses: untillpro/ci-action/.github/workflows/ci_rebuild_bp3.yml@main
+```
+
+**Called Workflow:** [`ci_rebuild_bp3.yml`](https://github.com/untillpro/ci-action/blob/main/.github/workflows/ci_rebuild_bp3.yml)
+
+**Actions:**
+
+- [**Rebuild airs-bp3**](https://github.com/untillpro/ci-action/blob/main/.github/workflows/ci_rebuild_bp3.yml#L28) → [`rebuild-test-bp3.sh`](https://github.com/untillpro/ci-action/blob/main/scripts/rebuild-test-bp3.sh)
+- [**Push to airs-bp3**](https://github.com/untillpro/ci-action/blob/main/.github/workflows/ci_rebuild_bp3.yml#L39)
 
 ---
 
-## Summary of Repositories and Files
+## 3. Daily Scheduled Test Suite (5 AM UTC)
 
-### voedger Repository
-- **Workflows:** `.github/workflows/*.yml`
-- **Custom Actions:** `.github/actions/*/action.yml`
-- **Scripts:** `.github/scripts/*.sh`
+**GitHub Event:** `schedule` (5 AM UTC) or `workflow_dispatch`
 
-### ci-action Repository (untillpro/ci-action)
-- **Reusable Workflows:** `.github/workflows/*.yml`
-- **Bash Scripts:** `scripts/*.sh`
-- **Main Action:** `action.yml` (used as `untillpro/ci-action@main`)
+**Voedger Workflow:** [`.github/workflows/ci-full.yml`](.github/workflows/ci-full.yml)
 
+**Condition:** `github.repository == 'voedger/voedger'`
+
+### Step 1: [Call CI Workflow](.github/workflows/ci-full.yml#L9)
+
+```yaml
+uses: untillpro/ci-action/.github/workflows/ci_reuse_go.yml@main
+```
+
+**Parameters:**
+
+- `ignore_copyright: "cmd/voedger/sys.monitor/site.main"`
+- `go_race: "true"` (enable race detector)
+- `short_test: "false"` (full tests)
+- `ignore_build: "true"`
+- `test_subfolders: "true"`
+
+### Step 2: [Notify on Failure](.github/workflows/ci-full.yml#L23)
+
+**Condition:** `if: failure()`
+
+```yaml
+uses: untillpro/ci-action/.github/workflows/create_issue.yml@main
+```
+
+### Step 3: [Vulnerability Check](.github/workflows/ci-full.yml#L37)
+
+**Condition:** `needs: call-workflow-ci`
+
+```yaml
+uses: untillpro/ci-action/.github/workflows/ci-vulncheck.yml@main
+```
+
+### Step 4: [Build and Deploy](.github/workflows/ci-full.yml#L49)
+
+**Condition:** `needs: call-workflow-vuln`
+
+```yaml
+uses: untillpro/ci-action/.github/workflows/cd-voedger.yml@main
+```
+
+---
+
+## 4. Workflow Files PR
+
+**GitHub Event:** `pull_request_target` on `.github/workflows/**`
+
+**Voedger Workflow:** [`.github/workflows/ci-wf_pr.yml`](.github/workflows/ci-wf_pr.yml)
+
+### Step 1: [Auto-Merge PR](.github/workflows/ci-wf_pr.yml#L9)
+
+```yaml
+uses: voedger/voedger/.github/workflows/merge.yml@main
+```
+
+**Action:** Automatically merges workflow file changes
+
+---
+
+## 5. Cherry-Pick Commits
+
+**GitHub Event:** Issue opened with title starting with `cprc` or `cprelease`
+
+**Voedger Workflow:** [`.github/workflows/cp.yml`](.github/workflows/cp.yml)
+
+**Actions:**
+
+1. [**Add comment to issue**](https://github.com/untillpro/ci-action/blob/main/scripts/add-issue-commit.sh) → [`add-issue-commit.sh`](https://github.com/untillpro/ci-action/blob/main/scripts/add-issue-commit.sh)
+2. [**Cherry-pick commits**](https://github.com/untillpro/ci-action/blob/main/scripts/cp.sh) → [`cp.sh`](https://github.com/untillpro/ci-action/blob/main/scripts/cp.sh)
+3. [**Close issue**](https://github.com/untillpro/ci-action/blob/main/scripts/close-issue.sh) → [`close-issue.sh`](https://github.com/untillpro/ci-action/blob/main/scripts/close-issue.sh)
+
+---
+
+## 6. Release Candidate Creation
+
+**GitHub Event:** Manual trigger via issue
+
+**Voedger Workflow:** [`.github/workflows/rc.yml`](.github/workflows/rc.yml)
+
+**Actions:**
+
+1. [**Create RC branch**](https://github.com/untillpro/ci-action/blob/main/scripts/rc.sh) → [`rc.sh`](https://github.com/untillpro/ci-action/blob/main/scripts/rc.sh)
+2. [**Close issue**](https://github.com/untillpro/ci-action/blob/main/scripts/close-issue.sh) → [`close-issue.sh`](https://github.com/untillpro/ci-action/blob/main/scripts/close-issue.sh)
+
+---
+
+## Workflow Dependency Graph
+
+```
+GitHub Event
+  ↓
+Voedger Workflow (ci-pkg-cmd_pr.yml, ci-pkg-cmd.yml, etc.)
+  ├─ Calls: untillpro/ci-action/.github/workflows/*.yml@main
+  │   ├─ ci_reuse_go_pr.yml
+  │   ├─ ci_reuse_go.yml
+  │   ├─ ci_rebuild_bp3.yml
+  │   ├─ create_issue.yml
+  │   ├─ ci-vulncheck.yml
+  │   └─ cd-voedger.yml
+  │
+  ├─ Calls: Local workflows (./.github/workflows/*.yml)
+  │   ├─ merge.yml
+  │   ├─ cp.yml
+  │   └─ rc.yml
+  │
+  └─ Executes: ci-action bash scripts via curl
+      ├─ checkPR.sh
+      ├─ cancelworkflow.sh
+      ├─ test_subfolders.sh
+      ├─ test_subfolders_full.sh
+      ├─ check_copyright.sh
+      ├─ gbash.sh
+      ├─ rebuild-test-bp3.sh
+      ├─ cp.sh
+      ├─ rc.sh
+      ├─ add-issue-commit.sh
+      ├─ close-issue.sh
+      └─ domergepr.sh
+```
+
+---
+
+## Summary
+
+Voedger's CI/CD pipeline follows this pattern:
+
+1. **GitHub Event** triggers Voedger workflow
+2. **Voedger workflow** calls ci-action reusable workflows
+3. **ci-action workflows** execute bash scripts via curl
+4. **Bash scripts** perform specific CI/CD tasks
+5. **Results** determine next workflow steps (merge, deploy, etc.)
+
+This modular architecture allows:
+
+- Easy updates to CI logic (update ci-action repo)
+- Consistent practices across projects
+- Clear separation of concerns
+- Reusable components
