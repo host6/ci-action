@@ -1,1 +1,3 @@
 [AIR-2086] ci-action: add "set -Eeuo pipefail" to each .sh file
+
+https://untill.atlassian.net/browse/AIR-2086
