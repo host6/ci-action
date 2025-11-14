@@ -1,0 +1,1 @@
+[AIR-2090] ci-action: eliminate .golangci.yml and rename gbash.sh -> run-linters.sh
