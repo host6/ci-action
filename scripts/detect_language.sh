@@ -6,24 +6,36 @@
 
 set -Eeuo pipefail
 
-# Detect project language (go or node_js)
-
-if [ -f "go.mod" ]; then
-    echo "go"
-    exit 0
+auth_header=()
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+    auth_header=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+elif [ -n "${TOKEN:-}" ]; then
+    auth_header=(-H "Authorization: Bearer ${TOKEN}")
 fi
 
-# force use Unix `find` because Windows `find` does not work as it used here
-FIND_BIN=/usr/bin/find
+commit_url="https://api.github.com/repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA"
+commit_json=$(curl -sS "${auth_header[@]}" -H "Accept: application/vnd.github+json" "$commit_url" || true)
+tree_sha=$(echo "$commit_json" | jq -r '.commit.tree.sha // empty')
 
-# Check for .js, .jsx, .ts, .tsx files (excluding hidden directories and node_modules)
-if "$FIND_BIN" . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) \
-    -not -path "./.git/*" \
-    -not -path "*/.*/*" \
-    -not -path "*/node_modules/*" \
-    -print -quit | grep -q .; then
-    echo "node_js"
-    exit 0
+language="unknown"
+
+if [ -n "$tree_sha" ]; then
+    tree_url="https://api.github.com/repos/$GITHUB_REPOSITORY/git/trees/$tree_sha?recursive=1"
+    tree_json=$(curl -sS "${auth_header[@]}" -H "Accept: application/vnd.github+json" "$tree_url" || true)
+
+    if [ -n "$tree_json" ]; then
+        language=$(echo "$tree_json" | jq -r '
+            if any(.tree[]?; .path == "go.mod") then
+            "go"
+            elif any(.tree[]?; (.path | (endswith(".js") or endswith(".jsx") or endswith(".ts") or endswith(".tsx"))
+                                    and (contains("/.") | not)
+                                    and (contains("/node_modules/") | not))) then
+            "node_js"
+            else
+            "unknown"
+            end
+        ')
+    fi
 fi
 
-echo "unknown"
+echo $language
